@@ -2,5 +2,5 @@
 2) kubernetes
 3) OS boot procedure
 4) s3fs
-5) Pixe boot, network boot, NFS boot
+5) PXE boot, network boot, NFS boot
 6) rootfs and PE images
