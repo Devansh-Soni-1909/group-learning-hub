@@ -30,4 +30,5 @@ Explore on:
 
 Read articles, wikis and documentation instead of fully relying on chatGPT 
 Objective: To understand the concepts in-depth so that we can make design decisions confidently
+
 ---
