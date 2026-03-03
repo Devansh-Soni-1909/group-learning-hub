@@ -37,7 +37,7 @@ A **backstore** is the actual storage backing device. It can be:
 - LVM
 - RAM disk
 
-> I have used  a **file-based backstore** is used.
+> I have used  a **file-based backstore** .
 
 ### 3.2 LUN (Logical Unit Number)
 
@@ -68,7 +68,7 @@ iqn.2026-03.local.lab:target1
 | Item              | Value                                    |
 | ----------------- | ---------------------------------------- |
 | OS                | Ubuntu (Single VM setup)                 |
-|             
+|                   |                                          |
 | Portal IP         | `127.0.0.1`                              |
 
 ---
