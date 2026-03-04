@@ -28,7 +28,8 @@ Explore on:
 4. How to configure LUNs on the initator
 5. How to send I/Os to the LUNs on the initiator
 
-Read articles, wikis and documentation instead of fully relying on chatGPT 
+Read articles, wikis and documentation instead of fully relying on chatGPT
+
 Objective: To understand the concepts in-depth so that we can make design decisions confidently
 
 ---
