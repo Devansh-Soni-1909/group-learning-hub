@@ -2,7 +2,7 @@
 
 My goal is to try running everything locally once and then think about shifting them inside a kubernetes cluster
 
-# S3 Server Reason
+## S3 Server Reason
 
 We need to host a S3 bucket server to store the base images and to use it a backstore using s3fs
 
@@ -17,7 +17,7 @@ Since we are considering setting up a kubernetes cluster, we need a docker image
    https://hub.docker.com/r/minio/minio
 3. Login to the web console and create a bucket to store the os images
 
-# VM OS Reason
+## VM OS Reason
 
 All the enterprise machines use Red Hat Enterprise Linux (RHEL) for their VMs.Upon Searching for how to configure iSCSI, I found this HPE blog explaining the steps on Red Hat Linux:
 
@@ -64,4 +64,18 @@ So upon searching, found Rocky linux ( https://rockylinux.org/ ) which is its cl
    - https://github.com/nitisht/cookbook/blob/master/docs/s3fs-fuse-with-minio.md
    - https://www.iblue.team/general-notes-1/s3fs-fuse-and-minio
 
-# Configuring iSCSI target
+# Configuring iSCSI target and initiator
+
+1. Copy the os image from the s3fs to the local disk \
+
+```
+cp /mnt/iscsi/Rocky-linux-9.iso /iscsi
+```
+
+2. Configure the iSCSI Target in Rocky Linux VM ( https://reintech.io/blog/configuring-iscsi-initiator-target-rocky-linux-9 )
+
+3. Configure the iSCSI Client/Iniator:
+   In Another VM or host OS ( Ubuntu in my case )
+
+- https://reintech.io/blog/configuring-iscsi-initiator-target-rocky-linux-9
+- https://ubuntu.com/server/docs/how-to/storage/iscsi-initiator-or-client/
