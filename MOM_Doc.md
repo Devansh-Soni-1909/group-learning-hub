@@ -57,6 +57,9 @@ Lab Systems Config:
 - Configure them as worker and master nodes
 - Minimum 2 systems
 - To simulate failover atleast 4 systems are needed
-- Base OS - Linux SLES Latest version installed 
+- Base OS - Linux SLES Latest version installed
+
+Resources: 
+- Configuring iSCSI in Rocky Linux (https://reintech.io/blog/configuring-iscsi-initiator-target-rocky-linux-9)
 
 ---
