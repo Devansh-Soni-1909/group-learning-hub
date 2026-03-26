@@ -160,8 +160,16 @@ Install the follwing in both all the nodes in both control and data plane.
 
 ## iSCSI Target & Client Setup
 
-- iSCSI Target setup in ubuntu: https://www.server-world.info/en/note?os=Ubuntu_22.04&p=iscsi&f=1
-- iSCSI Client setup in ubuntu: https://www.server-world.info/en/note?os=Ubuntu_22.04&p=iscsi&f=3
+### iSCSI Target setup in ubuntu:
+
+- Using Targetcli: https://www.server-world.info/en/note?os=Ubuntu_22.04&p=iscsi&f=1
+- Using tgt: https://www.server-world.info/en/note?os=Ubuntu_22.04&p=iscsi&f=2
+
+I have configured using targetcli
+
+### iSCSI Client setup in ubuntu:
+
+- https://www.server-world.info/en/note?os=Ubuntu_22.04&p=iscsi&f=3
 
 ## Setup Snapshots
 
