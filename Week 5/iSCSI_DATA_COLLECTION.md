@@ -184,7 +184,3 @@ On the controller (master side):
   https://github.com/open-iscsi/open-iscsi
 
 ---
-
-- Controllers for aggregation  
-
-A clean separation of responsibilities ensures maintainability and scalability.
