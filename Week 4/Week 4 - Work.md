@@ -192,6 +192,9 @@ I have configured using targetcli
   ![iscsi-target config](image-2.png)
 
 - iSCSI Client Config
-
   ![iscsi-client login](image.png)
   ![iscsi-client lun](image-1.png)
+
+
+## Notes:
+- Add description to the commands run
