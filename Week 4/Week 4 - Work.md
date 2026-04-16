@@ -156,7 +156,44 @@ Install the follwing in both all the nodes in both control and data plane.
   --discovery-token-ca-cert-hash sha256:f7e1f9022eed85a2fb10f6e203f255f60b97c65d18ccc240f409ad172d8a2008
   ```
 
-  Replace the command with what you get after initialization
+  Replace the command with what you get after initialization 4. If kube flannel pod is failing for the node with the error:
+
+  ```
+  Failed to check br_netfilter: stat /proc/sys/net/bridge/bridge-nf-call-iptables: no such file or directory
+  ```
+
+  Run these commands in the worker node:
+
+  ```
+  sudo modprobe br_netfilter
+  sudo modprobe bridge
+  sudo modprobe vxlan
+  sudo modprobe overlay
+
+  sudo apt update
+  sudo apt install -y linux-modules-extra-$(uname -r)
+  sudo reboot
+
+  printf "overlay\nbr_netfilter\nvxlan\n" | sudo tee
+
+  cat <<EOF | sudo tee k8s.conf
+  net.ipv4.ip_forward=1
+  net.bridge.bridge-nf-call-iptables=1
+  net.bridge.bridge-nf-call-ip6tables=1
+  EOF
+  sudo sysctl --system
+
+  sudo systemctl restart containerd
+  sudo systemctl restart kubelet
+  ```
+
+  Run these commands in the control plane:
+
+  ```
+  kubectl delete pod -n kube-flannel kube-flannel-<pod_name>
+  kubectl get pods -n kube-flannel -w
+  kubectl get nodes -w
+  ```
 
 ## iSCSI Target & Client Setup
 
@@ -195,3 +232,7 @@ I have configured using targetcli
 
   ![iscsi-client login](image.png)
   ![iscsi-client lun](image-1.png)
+
+```
+
+```
