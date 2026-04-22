@@ -234,4 +234,4 @@ I have configured using targetcli
 
 ## Notes:
 
-- Add description to the commands run
+- Add description to the commands ran
