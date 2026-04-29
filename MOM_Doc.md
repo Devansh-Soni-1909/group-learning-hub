@@ -109,3 +109,22 @@ Action Items:
 - Optional : remove client iqn to simplify the setup
 
 ---
+
+Date: 29/04/26
+
+Important points:
+- Mid demo is on May 11th
+- Slides and demo video for presentation(20 mins minimum, max 40 mins)
+- The entire project should be completed by May end. At max by June 1st week
+- Prepare slide deck and share by May 4th-5th
+
+Slides should include:
+- First slide - Title having team members name list 
+- Agenda - list of items 
+- Inro - what is the project. ?  goal ? 
+- Architecture - block diagram 
+- iscsi target/initiator/ luns configuration etc.. 
+- Tell about your application (metrics)
+- What you learnt and next action items 
+- Demo video
+
