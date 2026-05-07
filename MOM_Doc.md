@@ -97,3 +97,34 @@ Date: 15-04-2026
 - network metrics
 
 ---
+
+Date: 22/04/26
+
+Action Items:
+- Create atleast 2 iscsi-target VMs and name them as iscsi-target-1 and iscsi-target-2
+- Create all the fileio disk images in the host OS and mount the path to both the targets 
+- Create only one tpg inside each target but the iqn should contain the vm's hostname
+- Use the default port 3260 everywhere 
+- Modify the scripts to follow the above changes
+- Optional : remove client iqn to simplify the setup
+
+---
+
+Date: 29/04/26
+
+Important points:
+- Mid demo is on May 11th
+- Slides and demo video for presentation(20 mins minimum, max 40 mins)
+- The entire project should be completed by May end. At max by June 1st week
+- Prepare slide deck and share by May 4th-5th
+
+Slides should include:
+- First slide - Title having team members name list 
+- Agenda - list of items 
+- Inro - what is the project. ?  goal ? 
+- Architecture - block diagram 
+- iscsi target/initiator/ luns configuration etc.. 
+- Tell about your application (metrics)
+- What you learnt and next action items 
+- Demo video
+
