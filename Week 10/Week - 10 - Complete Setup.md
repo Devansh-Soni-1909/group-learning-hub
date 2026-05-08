@@ -507,17 +507,17 @@ View my docker image here: https://hub.docker.com/r/notmybug/iscsi-http
 
 1. Port forward the service
 
-```
-kubectl -n default port-forward service/iscsi-target-http 9000:9000
-```
+   ```
+   kubectl -n iscsi port-forward service/iscsi-target-http 9000:9000
+   ```
 
 2. Test the endpoint using curl or open the url in the browser
 
-```
-curl http://localhost:9000/metrics/flat
-curl http://localhost:9000/info
-curl http://localhost:9000/metrics/flat
-```
+   ```
+   curl http://localhost:9000/metrics/flat
+   curl http://localhost:9000/info
+   curl http://localhost:9000/metrics/flat
+   ```
 
 ## 7. Fetch metrics using python CLI
 
@@ -530,7 +530,6 @@ curl http://localhost:9000/metrics/flat
 
 2. Copy the python script to a local file
 3. Run the file
-
-```
-python3 iscsi-metrics-cli.py
-```
+   ```
+   python3 iscsi-metrics-cli.py
+   ```
