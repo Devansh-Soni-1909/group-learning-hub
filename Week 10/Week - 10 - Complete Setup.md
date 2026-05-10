@@ -448,3 +448,38 @@ To configure a new ubuntu VM as iscsi-client to work with above iscsi-setup, run
     ```
 
         - Reference: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/
+
+## 4. Test the CLI Functionalities
+
+- Run `python3 collect-iscsi-metrics.py`
+
+  ![cli-output](image.png)
+
+- Check the state file content: `cat collect-iscsi-metrics-state.json`
+
+  ![state-file-content](image-1.png)
+
+## 5. Assumptions and Limitiations
+
+This collector assumes the following to work correctly:
+
+- The cluster API is reachable and `kubectl get nodes` returns the worker nodes labeled as iSCSI targets.
+- The target nodes are selected by the label `iscsi-target=true` unless a different selector is passed.
+- `pdsh` is installed and can execute remote commands on those worker nodes.
+- The iSCSI target tree exists at `/sys/kernel/config/target/iscsi` unless overridden.
+- Each valid target is represented by an `iqn.*` directory with a `tpgt_1` child.
+- Each LUN is exposed as a `lun_*` directory under `.../tpgt_1/lun`.
+- Each LUN can be resolved to a backend object using `readlink -f`.
+- The backend object exposes `udev_path`, and that value is used as the stable image identity.
+- Image type is inferred from the identity string, mainly by matching `rootfs`, `pe`, or `pe_`.
+- The LUN stats files `read_mbytes` and `in_cmds` exist and contain parseable integer values.
+- Deleted images are detected by comparing the current `udev_path` snapshot to the previous snapshot stored in the JSON state file.
+- `--reset-state` starts deletion tracking fresh by clearing the saved state first.
+- `--no-state-update` allows a read-only run, but then deletion tracking will not advance for the next run.
+
+**Main limitations**:
+
+- Deleted-image reporting is only as accurate as the local JSON history. If the file is removed or reset, past deletions are forgotten.
+- If `udev_path` or the backend object name changes, the script may treat the same image as a different one.
+- If a target node is temporarily unreachable, its metrics may be missing or incomplete for that run.
+- The script currently relies on naming conventions to classify `rootfs` vs `pe`.
