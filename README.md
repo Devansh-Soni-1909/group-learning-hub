@@ -1,4 +1,4 @@
-# HPC Cluster iSCSI SBPS Monitoring Utility
+# HPC Cluster iSCSI SBPS Management Utility
 
 ## Overview
 
