@@ -10,17 +10,15 @@ CLI commands for retrieving and managing iSCSI target, initiator, image, and met
 iscsi
 │
 ├── get
-│   ├── nodes
-│   ├── node
-│   ├── luns
-│   ├── tpgts
-│   ├── images
-│   ├── metrics
-│   ├── sessions
-│   └── errors
-│
-└── delete
-    └── image
+    ├── nodes
+    ├── node
+    ├── luns
+    ├── tpgts
+    ├── images
+    ├── metrics
+    ├── sessions
+    └── errors
+
 ```
 
 ---
@@ -37,7 +35,6 @@ iscsi
 | `iscsi get metrics`  | Retrieve iSCSI metrics and statistics           |
 | `iscsi get sessions` | Show initiator sessions and mount status        |
 | `iscsi get errors`   | Scan recent logs for storage and network errors |
-| `iscsi delete image` | Delete a projected image from a target          |
 
 ---
 
@@ -243,11 +240,41 @@ iscsi get metrics --reset-state
 ### Sample Output
 
 ```text
-Generated At : 2026-05-31T12:00:00Z
+SCSI Metrics
+================================================================================================
+State file: /home/iscsi/.cache/iscsi-metrics/state.json
+Target nodes: worker-node-1
 
-Targets         : 2
-Initiators      : 3
-Deleted Images  : 0
+Configured iSCSI target nodes
+- worker-node-1: iqn.2026-04.lab.local:lab.target01
+
+Projected image summary
+Node          | Targets                            | TPGTs | LUNs | Total | Rootfs | PE | Deleted Rootfs | Deleted PE
+--------------+------------------------------------+-------+------+-------+--------+----+----------------+-----------
+worker-node-1 | iqn.2026-04.lab.local:lab.target01 | 1     | 10   | 10    | 2      | 8  | 0              | 0
+
+Cluster totals: total=10, rootfs=2, pe=8, deleted_rootfs=0, deleted_pe=0
+
+LUN level read I/O metrics per worker node
+worker-node-1
+IQN                                | TPGT   | LUN   | Type   | Image            | udev_path                             | Read MBytes | Read IOPs
+-----------------------------------+--------+-------+--------+------------------+---------------------------------------+-------------+----------
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_0 | rootfs | rootfs_disk1.img | /var/lib/iscsi_disks/rootfs_disk1.img | 46          | 102
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_1 | rootfs | rootfs_disk2.img | /var/lib/iscsi_disks/rootfs_disk2.img | 0           | 131
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_2 | pe     | pe_disk1.img     | /var/lib/iscsi_disks/pe_disk1.img     | 0           | 131
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_3 | pe     | pe_disk2.img     | /var/lib/iscsi_disks/pe_disk2.img     | 0           | 131
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_4 | pe     | pe_disk3.img     | /var/lib/iscsi_disks/pe_disk3.img     | 0           | 131
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_5 | pe     | pe_disk4.img     | /var/lib/iscsi_disks/pe_disk4.img     | 0           | 131
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_6 | pe     | pe_disk5.img     | /var/lib/iscsi_disks/pe_disk5.img     | 0           | 131
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_7 | pe     | pe_disk6.img     | /var/lib/iscsi_disks/pe_disk6.img     | 0           | 131
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_8 | pe     | pe_disk7.img     | /var/lib/iscsi_disks/pe_disk7.img     | 0           | 131
+iqn.2026-04.lab.local:lab.target01 | tpgt_1 | lun_9 | pe     | pe_disk8.img     | /var/lib/iscsi_disks/pe_disk8.img     | 0           | 96
+
+Detected storage/network errors
+No storage/network errors detected.
+
+Deleted PE/rootfs images since the last run
+None
 ```
 
 ---
@@ -330,50 +357,6 @@ Jun 01 11:28:43 worker-node-3 systemd-logind[699]: Session 98 logged out. Waitin
 .
 .
 ```
-
----
-
-# delete image
-
-### Syntax
-
-```bash
-iscsi delete image \
-    --name NODE \
-    --tpgt TPGT \
-    [--force] \
-    [--json] \
-    <image_id>
-```
-
-### Description
-
-Deletes a projected image from a target node.
-
-### Example
-
-```bash
-iscsi delete image \
-    --name node-1 \
-    --tpgt tpgt_1 \
-    --force \
-    my-image-id
-```
-
-### Sample Output
-
-```text
-Deleted image my-image-id from node-1
-```
-
----
-
-## Default Paths
-
-| Item               | Path                              |
-| ------------------ | --------------------------------- |
-| iSCSI Target Tree  | `/sys/kernel/config/target/iscsi` |
-| Metrics State File | `.cache/iscsi-metrics/state.json` |
 
 ---
 
