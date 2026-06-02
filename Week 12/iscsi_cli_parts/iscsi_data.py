@@ -708,7 +708,7 @@ def cmd_get_luns(args) -> None:
         role = detect_node_role(labels)
         images, _, errors = collect_target_images(args.name, args.base_path)
         if errors or label_error:
-            raise SystemExit("; ".join(errors))
+            raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
         payload = {
             "node": args.name,
             "role": role,
@@ -731,7 +731,7 @@ def cmd_get_tpgts(args) -> None:
         role = detect_node_role(labels)
         tpgts, errors = collect_target_tpgts(args.name, args.base_path)
         if errors or label_error:
-            raise SystemExit("; ".join(errors))
+            raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
         payload = {"node": args.name, "role": role, "tpgts": tpgts, "count": len(tpgts)}
     else:
         nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
@@ -747,7 +747,7 @@ def cmd_get_images(args) -> None:
         role = detect_node_role(labels)
         images, tpgts, errors = collect_target_images(args.name, args.base_path)
         if errors or label_error:
-            raise SystemExit("; ".join(errors))
+            raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
         payload = {
             "node": args.name,
             "role": role,
