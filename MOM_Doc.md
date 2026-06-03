@@ -149,9 +149,22 @@ Feedback & Next Action Items:
 - Note: Try to write code on your own
 
 
+---
+Date: 03/06/26
+CLI Commands Plan Discussion
 
-
-
+- Separate sessions and mount status details, replace get sessions with get sessions and get mount-status
+- In the documentation, show separate sections for target node and initator node commands
+- For the cmd: `get nodes` , Make the label implicit by providing an option to set the default label, Don't ask for the label everytime
+- For the cmd: `get node --name <NODE_NAME>`, Make it describe node --name <NODE_NAME>, Give a detailed summary of the node, List all the luns, tpgts, images in that node
+- For the cmd: `get luns` and `get images`, add a option to get only pe or rootfs luns/images
+- Change the VMs name to ncn-w001, ncn-w002 and use that in the --name <NODE_NAME> flag
+- For the cmd: `get metrics`, only show the read_mbytes and read_iops values for each lun only not all the data retrived from the node
+- For the cmd: `get sessions`, show all the details from the `iscsiadm -m session` cmd output
+- Optional: Remove the cmd `get errors`, It is only to alert
+- In the cmd: describe node, read the sbps-marshal.service & target.service status logs using `systemctl status sbps-marshal.service` and `systemctl status target.service` 
+- Only the recent errors should be shown, Last n days/ n lines not from the beginning, set a default value like 2 days/100 lines
+  
 
 
 
