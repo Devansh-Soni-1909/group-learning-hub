@@ -4,38 +4,38 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .common import (
-    DEFAULT_BASE_PATH,
     DEFAULT_INITIATOR_SELECTOR,
-    DEFAULT_STATE_FILE,
     DEFAULT_TARGET_SELECTOR,
     LunImage,
+    build_snapshot,
     count_by_type,
+    compare_snapshots,
     detect_node_role,
     emit_output,
+    BACKUP_PATHS,
     get_node_labels,
+    get_saveconfig,
     get_target_nodes,
     infer_image_type,
+    list_config_versions,
     list_acls,
     list_iqns,
     list_luns,
     list_tpgts,
-    load_state,
     parse_metric_value,
     read_lun_stats,
+    read_backup_config_file,
     render_table,
     resolve_object_path,
-    reset_state_file,
-    save_state,
-    snapshot_images_by_node,
     sum_metric,
-    update_state_and_get_deleted,
 )
 from .error_reporting import collect_node_diagnostics
 from .initiator_configuration import build_initiator_node_summary
+
+CONFIGFS_TARGET_PATH = "/sys/kernel/config/target/iscsi"
 
 
 def collect_target_images(
@@ -163,7 +163,54 @@ def collect_target_tpgts(node: str, base_path: str) -> Tuple[List[dict], List[st
     return tpgts, errors
 
 
-def build_target_node_summary(node: str, base_path: str) -> dict:
+def _filter_images(images: List[LunImage], image_type: str) -> List[LunImage]:
+    if image_type == "all":
+        return images
+    return [image for image in images if image.image_type == image_type]
+
+
+def _snapshot_deleted_rows(delta: dict) -> List[dict]:
+    deleted_rows: List[dict] = []
+    for image_type, items in (("rootfs", delta.get("rootfs_deleted", set())), ("pe", delta.get("pe_deleted", set()))):
+        for image_name, image_path in sorted(items):
+            deleted_rows.append(
+                {
+                    "type": image_type,
+                    "image_name": image_name or "-",
+                    "path": image_path or "-",
+                }
+            )
+    return deleted_rows
+
+
+def _load_backup_snapshot(
+    node: str, compare_config: Optional[str]
+) -> Tuple[Optional[dict], Optional[str], Optional[str]]:
+    if compare_config:
+        candidate_paths = [compare_config]
+        if not compare_config.startswith("/"):
+            candidate_paths = [f"{base}/{compare_config}" for base in BACKUP_PATHS]
+
+        last_error = None
+        for candidate_path in candidate_paths:
+            backup_config, error = read_backup_config_file(node, candidate_path)
+            if backup_config is not None:
+                return backup_config, None, candidate_path
+            last_error = error
+        return None, last_error, compare_config
+
+    versions, error = list_config_versions(node)
+    if error:
+        return None, error, None
+    if not versions:
+        return None, None, None
+
+    backup_path = versions[0]
+    backup_config, backup_error = read_backup_config_file(node, backup_path)
+    return backup_config, backup_error, backup_path
+
+
+def build_target_node_summary(node: str, base_path: str = CONFIGFS_TARGET_PATH) -> dict:
     images, tpgts, errors = collect_target_images(node, base_path)
     by_type = count_by_type(images)
     diagnostics, diagnostic_errors = collect_node_diagnostics(node)
@@ -265,8 +312,7 @@ def build_report(
         "defaults": {
             "node_selector": DEFAULT_TARGET_SELECTOR,
             "initiator_selector": DEFAULT_INITIATOR_SELECTOR,
-            "base_path": DEFAULT_BASE_PATH,
-            "state_file": str(DEFAULT_STATE_FILE),
+            "configfs_path": CONFIGFS_TARGET_PATH,
         },
     }
 
@@ -292,17 +338,40 @@ def format_target_summary(summary: dict) -> str:
     if summary.get("role") == "target":
         lines.append(f"IQNs: {', '.join(summary.get('iqns', [])) or 'None'}")
         lines.append(
-            f"TPGTs: {summary.get('tpgt_count', 0)}, LUNs: {summary.get('lun_count', 0)}, Active images: {summary.get('total_active_images', 0)}"
-        )
-        lines.append(
-            f"Rootfs: {summary.get('rootfs_count', 0)}, PE: {summary.get('pe_count', 0)}, Read MBytes: {summary.get('read_mbytes', 0)}, Read IOPs: {summary.get('read_iops', 0)}"
+            f"TPGTs: {summary.get('tpgt_count', 0)}, LUNs: {summary.get('lun_count', 0)}, Images: {summary.get('total_active_images', 0)}"
         )
         if summary.get("errors"):
             lines.append("Warnings:")
             lines.extend(f"- {message}" for message in summary["errors"])
+        tpgts = summary.get("tpgts", [])
+        if tpgts:
+            lines.append("")
+            lines.append("TPGTs")
+            lines.append(
+                render_table(
+                    [
+                        "IQN",
+                        "TPGT",
+                        "LUNs",
+                        "ACLs",
+                        "ACL names",
+                    ],
+                    [
+                        [
+                            tpgt["iqn"],
+                            tpgt["tpgt_name"],
+                            str(tpgt.get("lun_count", 0)),
+                            str(tpgt.get("acl_count", 0)),
+                            ", ".join(tpgt.get("acl_names", [])) or "None",
+                        ]
+                        for tpgt in tpgts
+                    ],
+                )
+            )
         images = summary.get("images", [])
         if images:
             lines.append("")
+            lines.append("LUNs and images")
             lines.append(
                 render_table(
                     [
@@ -355,6 +424,9 @@ def format_luns_output(payload: dict) -> str:
         lines.append(f"Node: {payload['node']}")
         lines.append(f"Role: {payload.get('role', 'target')}")
         luns = payload.get("luns", payload.get("images", []))
+        image_filter = payload.get("image_type", "all")
+        if image_filter != "all":
+            lines.append(f"Filter: {image_filter}")
         lines.append(f"LUNs: {payload.get('count', len(luns))}")
         if luns:
             lines.append(
@@ -430,6 +502,9 @@ def format_images_output(payload: dict) -> str:
         images = payload.get("images", [])
         lines.append(f"Node: {payload['node']}")
         lines.append(f"Role: {payload.get('role', 'target')}")
+        image_filter = payload.get("image_type", "all")
+        if image_filter != "all":
+            lines.append(f"Filter: {image_filter}")
         lines.append(f"Images: {payload.get('count', len(images))}")
         if images:
             lines.append(
@@ -499,178 +574,87 @@ def format_report(report: dict) -> str:
     lines: List[str] = []
     lines.append("iSCSI Metrics")
     lines.append("=" * 96)
-    lines.append(f"State file: {report['state_file']}")
-    lines.append(
-        "Target nodes: " + (", ".join(report["nodes"]) if report["nodes"] else "None")
-    )
+    lines.append(f"Generated At: {report.get('generated_at', '-')}")
+
+    nodes = report.get("nodes", [])
+    lines.append("Target nodes: " + (", ".join(nodes) if nodes else "None"))
     lines.append("")
 
-    # Only render target-related sections when there are target nodes
-    if report.get("nodes"):
-        lines.append("Configured iSCSI target nodes")
-        if report["nodes_summary"]:
-            for item in report["nodes_summary"]:
-                if item.get("role") == "initiator":
-                    continue
-                iqn_list = ", ".join(item["iqns"]) if item["iqns"] else "None"
-                lines.append(f"- {item['node']}: {iqn_list}")
-        else:
-            lines.append("None")
-        lines.append("")
+    metrics_rows = report.get("metrics_rows", [])
+    lines.append("LUN read metrics")
+    if metrics_rows:
+        lines.append(
+            render_table(
+                ["Node", "IQN", "TPGT", "LUN", "Image", "Read MBytes", "Read IOPs"],
+                metrics_rows,
+            )
+        )
+    else:
+        lines.append("No target LUN metrics found.")
+    lines.append("")
 
-    # Target-specific summaries and metrics
-    if report.get("nodes"):
-        target_summaries = [
-            item for item in report["nodes_summary"] if item.get("role") == "target"
-        ]
-        summary_rows: List[List[str]] = []
-        for item in target_summaries:
-            summary_rows.append(
+    deleted_rows: List[List[str]] = []
+    for node, rows in report.get("deleted_by_node", {}).items():
+        for row in rows:
+            deleted_rows.append([node, row.get("type", "unknown"), row.get("image_name", "-"), row.get("path", "-")])
+
+    lines.append("Deleted images since backup comparison")
+    if deleted_rows:
+        lines.append(render_table(["Node", "Type", "Image", "Path"], deleted_rows))
+        sources = report.get("comparison_sources", {})
+        if sources:
+            lines.append("")
+            lines.append("Comparison sources")
+            for node, source in sources.items():
+                lines.append(f"- {node}: {source}")
+    else:
+        lines.append("None")
+
+    comparison_summary = report.get("comparison_summary", {})
+    if comparison_summary:
+        lines.append("")
+        lines.append("Snapshot change summary")
+        rows = []
+        for node, summary in comparison_summary.items():
+            rows.append(
                 [
-                    item["node"],
-                    ", ".join(item["iqns"]) if item["iqns"] else "None",
-                    str(item["tpgt_count"]),
-                    str(item["lun_count"]),
-                    str(item["total_active_images"]),
-                    str(item["rootfs_count"]),
-                    str(item["pe_count"]),
-                    str(item["deleted_rootfs"]),
-                    str(item["deleted_pe"]),
+                    node,
+                    str(summary.get("iqns_added", 0)),
+                    str(summary.get("iqns_removed", 0)),
+                    str(summary.get("tpgs_added", 0)),
+                    str(summary.get("tpgs_removed", 0)),
+                    str(summary.get("luns_added", 0)),
+                    str(summary.get("luns_removed", 0)),
+                    str(summary.get("acls_added", 0)),
+                    str(summary.get("acls_removed", 0)),
+                    str(summary.get("storage_objects_added", 0)),
+                    str(summary.get("storage_objects_removed", 0)),
+                    str(summary.get("rootfs_deleted", 0)),
+                    str(summary.get("pe_deleted", 0)),
                 ]
             )
-
-        lines.append("Projected image summary")
         lines.append(
             render_table(
                 [
                     "Node",
-                    "Targets",
-                    "TPGTs",
-                    "LUNs",
-                    "Total",
-                    "Rootfs",
-                    "PE",
-                    "Deleted Rootfs",
-                    "Deleted PE",
+                    "IQNs +",
+                    "IQNs -",
+                    "TPGTs +",
+                    "TPGTs -",
+                    "LUNs +",
+                    "LUNs -",
+                    "ACLs +",
+                    "ACLs -",
+                    "Storage +",
+                    "Storage -",
+                    "Rootfs -",
+                    "PE -",
                 ],
-                summary_rows,
-            )
-            if summary_rows
-            else "No iSCSI target nodes found."
-        )
-        lines.append("")
-
-        total_active = sum(item["total_active_images"] for item in target_summaries)
-        total_rootfs = sum(item["rootfs_count"] for item in target_summaries)
-        total_pe = sum(item["pe_count"] for item in target_summaries)
-        total_deleted_rootfs = sum(item["deleted_rootfs"] for item in target_summaries)
-        total_deleted_pe = sum(item["deleted_pe"] for item in target_summaries)
-
-        lines.append(
-            f"Cluster totals: total={total_active}, rootfs={total_rootfs}, pe={total_pe}, deleted_rootfs={total_deleted_rootfs}, deleted_pe={total_deleted_pe}"
-        )
-        lines.append("")
-
-    if report.get("nodes"):
-        lines.append("LUN level read I/O metrics per worker node")
-        if target_summaries:
-            for item in target_summaries:
-                lines.append(item["node"])
-                lun_rows: List[List[str]] = []
-                for image in item["images"]:
-                    lun_rows.append(
-                        [
-                            image["iqn"],
-                            image["tpgt_name"],
-                            image["lun_name"],
-                            image["image_type"],
-                            image["image_name"],
-                            image["udev_path"],
-                            str(image["read_mbytes"]),
-                            str(image["read_iops"]),
-                        ]
-                    )
-                if lun_rows:
-                    lines.append(
-                        render_table(
-                            [
-                                "IQN",
-                                "TPGT",
-                                "LUN",
-                                "Type",
-                                "Image",
-                                "udev_path",
-                                "Read MBytes",
-                                "Read IOPs",
-                            ],
-                            lun_rows,
-                        )
-                    )
-                else:
-                    lines.append("No active LUNs found.")
-                lines.append("")
-        else:
-            lines.append("No target nodes found.")
-            lines.append("")
-
-    lines.append("Detected storage/network errors")
-    diagnostic_rows: List[List[str]] = []
-    for item in report["nodes_summary"]:
-        for diagnostic in item.get("diagnostics", []):
-            diagnostic_rows.append(
-                [
-                    diagnostic["node"],
-                    diagnostic["severity"],
-                    diagnostic["source"],
-                    diagnostic["message"][:120],
-                ]
-            )
-    if diagnostic_rows:
-        lines.append(
-            render_table(["Node", "Severity", "Source", "Message"], diagnostic_rows)
-        )
-    else:
-        lines.append("No storage/network errors detected.")
-    lines.append("")
-
-    if report.get("nodes"):
-        lines.append("Deleted PE/rootfs images since the last run")
-        if report["deleted_images"]:
-            deleted_rows = [
-                [
-                    image["node"],
-                    image.get("image_type", "unknown"),
-                    image.get("image_name", "-"),
-                    image.get("udev_path", "-"),
-                ]
-                for image in report["deleted_images"]
-            ]
-            lines.append(
-                render_table(["Node", "Type", "Image", "udev_path"], deleted_rows)
-            )
-        else:
-            lines.append("None")
-        lines.append("")
-
-    if report.get("initiator_stats"):
-        lines.append("Initiator node mount status")
-        initiator_rows = [
-            [
-                node,
-                str(stats.get("sessions", 0)),
-                str(stats["total"]),
-                str(stats["mounted"]),
-                str(stats["unmounted"]),
-            ]
-            for node, stats in report["initiator_stats"].items()
-        ]
-        lines.append(
-            render_table(
-                ["Node", "Sessions", "Total", "Mounted", "Unmounted"], initiator_rows
+                rows,
             )
         )
 
-    if report["errors"]:
+    if report.get("errors"):
         lines.append("")
         lines.append("Warnings")
         for node, message in report["errors"].items():
@@ -680,18 +664,19 @@ def format_report(report: dict) -> str:
 
 
 def cmd_get_nodes(args) -> None:
-    nodes, error = get_target_nodes(args.label)
+    label = args.label or args.default_target_label
+    nodes, error = get_target_nodes(label)
     if error:
         raise SystemExit(error)
     emit_output(
-        {"label": args.label, "nodes": nodes, "count": len(nodes)},
+        {"label": label, "nodes": nodes, "count": len(nodes)},
         args.json,
         formatter=format_nodes_output,
     )
 
 
 def cmd_get_node(args) -> None:
-    summary, error = summarize_requested_node(args.name, args.base_path)
+    summary, error = summarize_requested_node(args.name, CONFIGFS_TARGET_PATH)
     if error:
         raise SystemExit(error)
     emit_output(summary, args.json, formatter=format_target_summary)
@@ -701,7 +686,8 @@ def cmd_get_luns(args) -> None:
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
-        images, _, errors = collect_target_images(args.name, args.base_path)
+        images, _, errors = collect_target_images(args.name, CONFIGFS_TARGET_PATH)
+        images = _filter_images(images, args.image_type)
         if errors or label_error:
             raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
         payload = {
@@ -709,14 +695,19 @@ def cmd_get_luns(args) -> None:
             "role": role,
             "luns": [asdict(image) for image in images],
             "count": len(images),
+            "image_type": args.image_type,
         }
     else:
         nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
         if error:
             raise SystemExit(error)
-        payload = {
-            "nodes": _collect_summaries_concurrently(nodes, args.base_path),
-        }
+        summaries = _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)
+        if args.image_type != "all":
+            for summary in summaries:
+                summary["images"] = [
+                    image for image in summary.get("images", []) if image.get("image_type") == args.image_type
+                ]
+        payload = {"nodes": summaries}
     emit_output(payload, args.json, formatter=format_luns_output)
 
 
@@ -724,7 +715,7 @@ def cmd_get_tpgts(args) -> None:
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
-        tpgts, errors = collect_target_tpgts(args.name, args.base_path)
+        tpgts, errors = collect_target_tpgts(args.name, CONFIGFS_TARGET_PATH)
         if errors or label_error:
             raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
         payload = {"node": args.name, "role": role, "tpgts": tpgts, "count": len(tpgts)}
@@ -732,7 +723,7 @@ def cmd_get_tpgts(args) -> None:
         nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
         if error:
             raise SystemExit(error)
-        payload = {"nodes": _collect_summaries_concurrently(nodes, args.base_path)}
+        payload = {"nodes": _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)}
     emit_output(payload, args.json, formatter=format_tpgts_output)
 
 
@@ -740,37 +731,55 @@ def cmd_get_images(args) -> None:
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
-        images, tpgts, errors = collect_target_images(args.name, args.base_path)
+        images, tpgts, errors = collect_target_images(args.name, CONFIGFS_TARGET_PATH)
+        images = _filter_images(images, args.image_type)
+        filtered_tpgts = []
+        if args.image_type == "all":
+            filtered_tpgts = tpgts
+        else:
+            allowed_ids = {image.lun_id for image in images}
+            for tpgt in tpgts:
+                filtered_luns = [lun for lun in tpgt.get("luns", []) if lun.get("lun_id") in allowed_ids]
+                if filtered_luns:
+                    filtered_tpgt = dict(tpgt)
+                    filtered_tpgt["luns"] = filtered_luns
+                    filtered_tpgt["lun_count"] = len(filtered_luns)
+                    filtered_tpgts.append(filtered_tpgt)
         if errors or label_error:
             raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
         payload = {
             "node": args.name,
             "role": role,
             "images": [asdict(image) for image in images],
-            "tpgts": tpgts,
+            "tpgts": filtered_tpgts,
             "count": len(images),
+            "image_type": args.image_type,
         }
     else:
         nodes, error = get_target_nodes(DEFAULT_TARGET_SELECTOR)
         if error:
             raise SystemExit(error)
-        payload = {"nodes": _collect_summaries_concurrently(nodes, args.base_path)}
+        summaries = _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)
+        if args.image_type != "all":
+            for summary in summaries:
+                summary["images"] = [
+                    image for image in summary.get("images", []) if image.get("image_type") == args.image_type
+                ]
+        payload = {"nodes": summaries}
     emit_output(payload, args.json, formatter=format_images_output)
 
 
 def cmd_get_metrics(args) -> None:
-    state_path = Path(args.state_file).expanduser()
-    if args.reset_state:
-        reset_state_file(state_path)
-
     node_results: List[dict] = []
     errors: Dict[str, str] = {}
-    current_snapshots: Dict[str, Dict[str, dict]] = {}
+    metrics_rows: List[List[str]] = []
     deleted_by_node: Dict[str, List[dict]] = {}
+    comparison_summary: Dict[str, Dict[str, int]] = {}
+    comparison_sources: Dict[str, str] = {}
     initiator_stats: Dict[str, Dict] = {}
 
     if args.name:
-        summary, error = summarize_requested_node(args.name, args.base_path)
+        summary, error = summarize_requested_node(args.name, CONFIGFS_TARGET_PATH)
         if error:
             raise SystemExit(error)
 
@@ -780,16 +789,48 @@ def cmd_get_metrics(args) -> None:
             errors[summary["node"]] = "; ".join(current_errors)
 
         if summary.get("role") == "target":
-            current_snapshots[summary["node"]] = snapshot_images_by_node(
-                [LunImage(**image) for image in summary["images"]]
-            ).get(summary["node"], {})
-            state = load_state(state_path)
-            deleted_by_node = update_state_and_get_deleted(
-                state, current_snapshots, [summary["node"]]
-            )
-            state["generated_at"] = datetime.now(timezone.utc).isoformat()
-            if not args.no_state_update:
-                save_state(state_path, state)
+            for image in summary.get("images", []):
+                metrics_rows.append(
+                    [
+                        summary["node"],
+                        image["iqn"],
+                        image["tpgt_name"],
+                        image["lun_name"],
+                        image["image_name"],
+                        str(image["read_mbytes"]),
+                        str(image["read_iops"]),
+                    ]
+                )
+            current_config, current_error = get_saveconfig(summary["node"])
+            if current_error:
+                errors[summary["node"]] = current_error
+            else:
+                backup_config, backup_error, backup_source = _load_backup_snapshot(
+                    summary["node"], args.compare_config
+                )
+                if backup_error:
+                    errors[f"{summary['node']}:backup"] = backup_error
+                elif backup_config is not None:
+                    current_snapshot = build_snapshot(current_config)
+                    previous_snapshot = build_snapshot(backup_config)
+                    delta = compare_snapshots(current_snapshot, previous_snapshot)
+                    deleted_by_node[summary["node"]] = _snapshot_deleted_rows(delta)
+                    comparison_summary[summary["node"]] = {
+                        "iqns_added": len(delta["iqns_added"]),
+                        "iqns_removed": len(delta["iqns_removed"]),
+                        "tpgs_added": len(delta["tpgs_added"]),
+                        "tpgs_removed": len(delta["tpgs_removed"]),
+                        "luns_added": len(delta["luns_added"]),
+                        "luns_removed": len(delta["luns_removed"]),
+                        "acls_added": len(delta["acls_added"]),
+                        "acls_removed": len(delta["acls_removed"]),
+                        "storage_objects_added": len(delta["storage_objects_added"]),
+                        "storage_objects_removed": len(delta["storage_objects_removed"]),
+                        "rootfs_deleted": len(delta["rootfs_deleted"]),
+                        "pe_deleted": len(delta["pe_deleted"]),
+                    }
+                    if backup_source:
+                        comparison_sources[summary["node"]] = backup_source
         else:
             initiator_stats[summary["node"]] = {
                 "total": summary.get("total", 0),
@@ -802,13 +843,53 @@ def cmd_get_metrics(args) -> None:
         if error:
             raise SystemExit(error)
 
-        for summary in _collect_summaries_concurrently(target_nodes, args.base_path):
+        for summary in _collect_summaries_concurrently(target_nodes, CONFIGFS_TARGET_PATH):
             if summary["errors"]:
                 errors[summary["node"]] = "; ".join(summary["errors"])
             node_results.append(summary)
-            current_snapshots[summary["node"]] = snapshot_images_by_node(
-                [LunImage(**image) for image in summary["images"]]
-            ).get(summary["node"], {})
+            for image in summary.get("images", []):
+                metrics_rows.append(
+                    [
+                        summary["node"],
+                        image["iqn"],
+                        image["tpgt_name"],
+                        image["lun_name"],
+                        image["image_name"],
+                        str(image["read_mbytes"]),
+                        str(image["read_iops"]),
+                    ]
+                )
+
+            current_config, current_error = get_saveconfig(summary["node"])
+            if current_error:
+                errors[summary["node"]] = current_error
+            else:
+                backup_config, backup_error, backup_source = _load_backup_snapshot(
+                    summary["node"], args.compare_config
+                )
+                if backup_error:
+                    errors[f"{summary['node']}:backup"] = backup_error
+                elif backup_config is not None:
+                    current_snapshot = build_snapshot(current_config)
+                    previous_snapshot = build_snapshot(backup_config)
+                    delta = compare_snapshots(current_snapshot, previous_snapshot)
+                    deleted_by_node[summary["node"]] = _snapshot_deleted_rows(delta)
+                    comparison_summary[summary["node"]] = {
+                        "iqns_added": len(delta["iqns_added"]),
+                        "iqns_removed": len(delta["iqns_removed"]),
+                        "tpgs_added": len(delta["tpgs_added"]),
+                        "tpgs_removed": len(delta["tpgs_removed"]),
+                        "luns_added": len(delta["luns_added"]),
+                        "luns_removed": len(delta["luns_removed"]),
+                        "acls_added": len(delta["acls_added"]),
+                        "acls_removed": len(delta["acls_removed"]),
+                        "storage_objects_added": len(delta["storage_objects_added"]),
+                        "storage_objects_removed": len(delta["storage_objects_removed"]),
+                        "rootfs_deleted": len(delta["rootfs_deleted"]),
+                        "pe_deleted": len(delta["pe_deleted"]),
+                    }
+                    if backup_source:
+                        comparison_sources[summary["node"]] = backup_source
 
         initiator_nodes, initiator_error = get_target_nodes(args.initiator_selector)
         if initiator_error:
@@ -825,32 +906,16 @@ def cmd_get_metrics(args) -> None:
             if summary["errors"]:
                 errors[initiator_node] = "; ".join(summary["errors"])
 
-        state = load_state(state_path)
-        deleted_by_node = update_state_and_get_deleted(
-            state, current_snapshots, target_nodes
-        )
-        state["generated_at"] = datetime.now(timezone.utc).isoformat()
-        if not args.no_state_update:
-            save_state(state_path, state)
-
-    # If a single node was requested and it's an initiator, do not list it
-    # as a target node in the report. This prevents printing target metrics
-    # placeholders when the user asked only for an initiator node.
-    if args.name and node_results and node_results[0].get("role") == "initiator":
-        report_target_nodes: List[str] = []
-    else:
-        report_target_nodes = (
-            [item["node"] for item in node_results] if args.name else target_nodes
-        )
-
-    report = build_report(
-        report_target_nodes,
-        node_results,
-        deleted_by_node,
-        state_path,
-        errors,
-        initiator_stats,
-    )
+    report = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "nodes": [item["node"] for item in node_results if item.get("role") == "target"],
+        "metrics_rows": metrics_rows,
+        "deleted_by_node": deleted_by_node,
+        "comparison_summary": comparison_summary,
+        "comparison_sources": comparison_sources,
+        "errors": errors,
+        "initiator_stats": initiator_stats,
+    }
     emit_output(report, args.json, formatter=format_report)
 
 
