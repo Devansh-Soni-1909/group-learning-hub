@@ -7,13 +7,12 @@ import subprocess
 import shlex
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 DEFAULT_TARGET_SELECTOR = "iscsi-target=true"
 DEFAULT_INITIATOR_SELECTOR = "iscsi-role=initiator"
-DEFAULT_BASE_PATH = "/sys/kernel/config/target/iscsi"
-DEFAULT_STATE_FILE = Path.cwd() / ".cache" / "iscsi-metrics" / "state.json"
+SAVECONFIG_PATHS = ["/etc/rtslib-fb-target/saveconfig.json", "/etc/target/saveconfig.json"]
+BACKUP_PATHS = ["/etc/rtslib-fb-target/backup", "/etc/target/backup"]
 
 
 @dataclass
@@ -185,9 +184,8 @@ def get_saveconfig(node: str) -> Tuple[Optional[dict], Optional[str]]:
         cached_data, cached_error = _saveconfig_cache[node]
         return cached_data, cached_error
 
-    paths = ["/etc/rtslib-fb-target/saveconfig.json", "/etc/target/saveconfig.json"]
     last_error = None
-    for path in paths:
+    for path in SAVECONFIG_PATHS:
         cmd = f'pdsh -w {node} "sudo cat {path} 2>/dev/null"'
         output, error = run_pdsh_text(cmd)
         if error:
@@ -225,29 +223,27 @@ def _parse_path(path: str) -> Tuple[Optional[str], Optional[int]]:
 
 
 def list_config_versions(node: str) -> Tuple[List[str], str | None]:
-    paths = ["/etc/rtslib-fb-target/backup", "/etc/target/backup"]
     last_error = None
-    for path in paths:
-        cmd = f'pdsh -w {node} "sudo ls {path} 2>/dev/null"'
+    for path in BACKUP_PATHS:
+        cmd = f'pdsh -w {node} "sudo find {path} -maxdepth 1 -type f 2>/dev/null | sort"'
         output, error = run_pdsh_lines(cmd)
         if error:
             last_error = error
             continue
-        if not output or len(output) == 0:
+        if not output:
             last_error = f"Empty directory or No directory found at the {path}"
             continue
-        if output:
-            output = [f"{path}/{file}" for file in output]
-            return output, None
+        return output, None
     return None, last_error
 
 
 def read_backup_config_file(node: str, path: str):
-    cmd = f'pdsh -w {node} "sudo gzip -dc {path}"'
+    remote_reader = f"sudo gzip -dc {path}" if path.endswith(".gz") else f"sudo cat {path}"
+    cmd = f'pdsh -w {node} "{remote_reader}"'
     output, error = run_pdsh_text(cmd)
     if error:
         return None, error
-    if not output.strip() or len(output) == 0:
+    if not output.strip():
         return None, f"Empty file or file not found at {path}"
     try:
         data = json.loads(output)
@@ -454,6 +450,9 @@ def build_snapshot(config: dict) -> dict:
         plugin = obj.get("plugin", "")
         path = obj.get("dev", "")
 
+        if not name and not path:
+            continue
+
         snapshot["storage_objects"].add((plugin, name, path))
         image_type = infer_image_type(name)
         if image_type == "unknown":
@@ -469,10 +468,14 @@ def build_snapshot(config: dict) -> dict:
             continue
 
         iqn = target.get("wwn")
+        if not iqn:
+            continue
         snapshot["iqns"].add(iqn)
 
         for tpg in target.get("tpgs", []):
             tag = tpg.get("tag")
+            if tag is None:
+                continue
             snapshot["tpgs"].add((iqn, tag))
 
             for lun in tpg.get("luns", []):
@@ -495,23 +498,19 @@ def compare_snapshots(
     current_snapshot: dict,
     previous_snapshot: dict,
 ) -> dict:
-
     return {
-        "iqns_added": current_snapshot["iqns"] - previous_snapshot["iqns"],
-        "iqns_removed": previous_snapshot["iqns"] - current_snapshot["iqns"],
-        "tpgs_added": current_snapshot["tpgs"] - previous_snapshot["tpgs"],
-        "tpgs_removed": previous_snapshot["tpgs"] - current_snapshot["tpgs"],
-        "luns_added": current_snapshot["luns"] - previous_snapshot["luns"],
-        "luns_removed": previous_snapshot["luns"] - current_snapshot["luns"],
-        "acls_added": current_snapshot["acls"] - previous_snapshot["acls"],
-        "acls_removed": previous_snapshot["acls"] - current_snapshot["acls"],
-        "storage_objects_added": current_snapshot["storage_objects"]
-        - previous_snapshot["storage_objects"],
-        "storage_objects_removed": previous_snapshot["storage_objects"]
-        - current_snapshot["storage_objects"],
-        "rootfs_deleted": previous_snapshot["rootfs_images"]
-        - current_snapshot["rootfs_images"],
-        "pe_deleted": previous_snapshot["pe_images"] - current_snapshot["pe_images"],
+        "iqns_added": current_snapshot.get("iqns", set()) - previous_snapshot.get("iqns", set()),
+        "iqns_removed": previous_snapshot.get("iqns", set()) - current_snapshot.get("iqns", set()),
+        "tpgs_added": current_snapshot.get("tpgs", set()) - previous_snapshot.get("tpgs", set()),
+        "tpgs_removed": previous_snapshot.get("tpgs", set()) - current_snapshot.get("tpgs", set()),
+        "luns_added": current_snapshot.get("luns", set()) - previous_snapshot.get("luns", set()),
+        "luns_removed": previous_snapshot.get("luns", set()) - current_snapshot.get("luns", set()),
+        "acls_added": current_snapshot.get("acls", set()) - previous_snapshot.get("acls", set()),
+        "acls_removed": previous_snapshot.get("acls", set()) - current_snapshot.get("acls", set()),
+        "storage_objects_added": current_snapshot.get("storage_objects", set()) - previous_snapshot.get("storage_objects", set()),
+        "storage_objects_removed": previous_snapshot.get("storage_objects", set()) - current_snapshot.get("storage_objects", set()),
+        "rootfs_deleted": previous_snapshot.get("rootfs_images", set()) - current_snapshot.get("rootfs_images", set()),
+        "pe_deleted": previous_snapshot.get("pe_images", set()) - current_snapshot.get("pe_images", set()),
     }
 
 
