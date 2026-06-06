@@ -7,6 +7,8 @@ from typing import List, Optional, Tuple
 from .common import emit_output, run_command
 from .iscsi_data import collect_target_images
 
+CONFIGFS_TARGET_PATH = "/sys/kernel/config/target/iscsi"
+
 
 def _confirm(prompt: str) -> bool:
     try:
@@ -69,7 +71,7 @@ def cmd_delete_image(args) -> None:
 
     if len(nodes) == 1:
         result = remove_target_image(
-            nodes[0], args.tpgt, args.image_id, args.base_path, args.force
+            nodes[0], args.tpgt, args.image_id, CONFIGFS_TARGET_PATH, args.force
         )
     else:
         results = []
@@ -81,7 +83,7 @@ def cmd_delete_image(args) -> None:
                     node,
                     args.tpgt,
                     args.image_id,
-                    args.base_path,
+                    CONFIGFS_TARGET_PATH,
                     args.force,
                 ): node
                 for node in nodes
