@@ -12,6 +12,7 @@ from iscsi_cli_parts.iscsi_data import (
     cmd_get_node,
     cmd_get_nodes,
     cmd_get_sessions,
+    cmd_get_mount_status,
     cmd_get_tpgts,
 )
 from iscsi_cli_parts.target_configuration import cmd_delete_image
