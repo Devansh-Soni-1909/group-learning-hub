@@ -48,7 +48,42 @@ def collect_recent_logs(node: str, lines: int = 200) -> Tuple[str, Optional[str]
             continue
     return "", f"{node}: unable to collect logs"
 
+def collect_service_errors(
+    node: str,
+    days: int = 2,
+    lines: int = 100,
+) -> Tuple[dict, List[str]]:
+    services = [
+        "sbps-marshal.service",
+        "target.service",
+    ]
 
+    service_logs = {}
+    errors = []
+
+    for service in services:
+        command = (
+            f'journalctl -u {service} '
+            f'--since "{days} days ago" '
+            f'-p err '
+            f'-n {lines} '
+            '--no-pager'
+        )
+
+        output, error = run_pdsh_text(
+            f'pdsh -w {node} "{command}"'
+        )
+
+        if error:
+            errors.append(
+                f"{node}: unable to collect errors for {service}: {error}"
+            )
+            continue
+
+        service_logs[service] = output
+
+    return service_logs, errors
+    
 def collect_recent_logs_for_nodes(
     nodes: List[str], lines: int = 200
 ) -> Tuple[dict, dict]:
@@ -105,11 +140,19 @@ def collect_node_diagnostics(node: str) -> Tuple[List[NodeErrorReport], List[str
 def _collect_error_summary(node: str, lines: int) -> dict:
     logs, log_error = collect_recent_logs(node, lines)
     diagnostics = scan_logs_for_errors(node, logs) if logs else []
+
+    service_errors, service_error_messages = collect_service_errors(
+        node=node,
+        days=2,
+        lines=100,
+    )
     return {
         "node": node,
         "lines": lines,
         "log_error": log_error,
         "logs": logs,
+        "service_errors": service_errors,
+        "service_error_messages": service_error_messages,
         "diagnostics": [asdict(diagnostic) for diagnostic in diagnostics],
     }
 
@@ -122,6 +165,7 @@ def format_error_summary(payload: dict) -> str:
             "",
             "Node summaries",
         ]
+
         node_rows = [
             [
                 item.get("node", "-"),
@@ -130,12 +174,47 @@ def format_error_summary(payload: dict) -> str:
             ]
             for item in payload.get("nodes", [])
         ]
+
         if node_rows:
-            lines.append(render_table(["Node", "Findings", "Log status"], node_rows))
+            lines.append(
+                render_table(
+                    ["Node", "Findings", "Log status"],
+                    node_rows,
+                )
+            )
         else:
             lines.append("None")
 
+        #
+        # Recent Service Errors
+        #
+        lines.append("")
+        lines.append("Recent Service Errors")
+
+        for item in payload.get("nodes", []):
+            service_errors = item.get("service_errors", {})
+
+            lines.append("")
+            lines.append(f"Node: {item.get('node', '-')}")
+
+            if not service_errors:
+                lines.append("No recent service errors found.")
+                continue
+
+            for service, output in service_errors.items():
+                lines.append("")
+                lines.append(f"Service: {service}")
+
+                if output and output.strip():
+                    lines.append(output)
+                else:
+                    lines.append("No recent errors found.")
+
+        #
+        # Detected Errors
+        #
         diagnostic_rows = []
+
         for item in payload.get("nodes", []):
             for diagnostic in item.get("diagnostics", []):
                 diagnostic_rows.append(
@@ -146,23 +225,53 @@ def format_error_summary(payload: dict) -> str:
                         diagnostic.get("message", "-")[:120],
                     ]
                 )
+
         lines.append("")
         lines.append("Detected errors")
+
         if diagnostic_rows:
             lines.append(
-                render_table(["Node", "Severity", "Source", "Message"], diagnostic_rows)
+                render_table(
+                    ["Node", "Severity", "Source", "Message"],
+                    diagnostic_rows,
+                )
             )
         else:
             lines.append("None")
+
         return "\n".join(lines)
 
-    lines = [f"Node: {payload.get('node', '-')}", f"Lines: {payload.get('lines', '-')}"]
+    #
+    # Single-node mode
+    #
+    lines = [
+        f"Node: {payload.get('node', '-')}",
+        f"Lines: {payload.get('lines', '-')}",
+    ]
+
     if payload.get("log_error"):
         lines.append(f"Log error: {payload['log_error']}")
 
+    service_errors = payload.get("service_errors", {})
+
+    if service_errors:
+        lines.append("")
+        lines.append("Recent Service Errors")
+
+        for service, output in service_errors.items():
+            lines.append("")
+            lines.append(service)
+
+            if output and output.strip():
+                lines.append(output)
+            else:
+                lines.append("No recent errors found.")
+
     diagnostics = payload.get("diagnostics", [])
+
     lines.append("")
     lines.append("Detected errors")
+
     if diagnostics:
         rows = [
             [
@@ -172,7 +281,13 @@ def format_error_summary(payload: dict) -> str:
             ]
             for diagnostic in diagnostics
         ]
-        lines.append(render_table(["Severity", "Source", "Message"], rows))
+
+        lines.append(
+            render_table(
+                ["Severity", "Source", "Message"],
+                rows,
+            )
+        )
     else:
         lines.append("None")
 
@@ -208,12 +323,19 @@ def cmd_get_errors(args) -> None:
             for future in as_completed(future_map):
                 node = future_map[future]
                 diagnostics = [asdict(item) for item in future.result()]
+                service_errors, service_error_messages = collect_service_errors(
+                    node=node,
+                    days=2,
+                    lines=100,
+                )
                 payload["nodes"].append(
                     {
                         "node": node,
                         "lines": args.lines,
                         "log_error": errors_by_node.get(node),
                         "logs": logs_by_node.get(node, ""),
+                        "service_errors": service_errors,
+                        "service_error_messages": service_error_messages,
                         "diagnostics": diagnostics,
                     }
                 )
