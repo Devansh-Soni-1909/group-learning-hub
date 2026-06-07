@@ -1043,9 +1043,12 @@ def cmd_get_metrics(args) -> None:
     }
     emit_output(report, args.json, formatter=format_report)
 
-
 def cmd_get_sessions(args) -> None:
     if args.name:
+        labels, label_error = get_node_labels(args.name)
+        role = detect_node_role(labels) if labels else "unknown"
+        if role != "initiator":
+            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for initiator nodes")
         payload = build_initiator_node_summary(args.name)
     else:
         nodes, error = get_target_nodes(args.label)
@@ -1054,9 +1057,12 @@ def cmd_get_sessions(args) -> None:
         payload = {"nodes": _collect_initiator_summaries_concurrently(nodes)}
     emit_output(payload, args.json, formatter=format_sessions_output)
 
-
 def cmd_get_mount_status(args) -> None:
     if args.name:
+        labels, label_error = get_node_labels(args.name)
+        role = detect_node_role(labels) if labels else "unknown"
+        if role != "initiator":
+            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for initiator nodes")
         payload = build_initiator_mount_status(args.name)
     else:
         nodes, error = get_target_nodes(args.label)
