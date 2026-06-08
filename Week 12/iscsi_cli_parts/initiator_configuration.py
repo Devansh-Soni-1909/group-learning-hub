@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 from .common import run_pdsh_lines, run_pdsh_text
 from .error_reporting import collect_node_diagnostics
 
-
+ 
 def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
     mounts: List[dict] = []
     for line in output.splitlines():
