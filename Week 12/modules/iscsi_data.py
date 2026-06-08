@@ -769,13 +769,22 @@ def format_report(report: dict) -> str:
 
     return "\n".join(lines)
 
+def cmd_get_nodes(args) -> None:
+    label = args.label or args.default_target_label
+    nodes, error = get_target_nodes(label)
+    if error:
+        raise SystemExit(error)
+    emit_output(
+        {"label": label, "nodes": nodes, "count": len(nodes)},
+        formatter=format_nodes_output,
+    )
 
 def cmd_describe_node(args) -> None:
     if args.name:
         summary, error = summarize_requested_node(args.name, args.base_path)
         if error:
             raise SystemExit(error)
-        emit_output(summary, args.json, formatter=format_target_summary)
+        emit_output(summary, formatter=format_target_summary)
         return
 
     label = args.label or DEFAULT_TARGET_SELECTOR
@@ -784,7 +793,6 @@ def cmd_describe_node(args) -> None:
         raise SystemExit(error)
     emit_output(
         {"label": label, "nodes": nodes, "count": len(nodes)},
-        args.json,
         formatter=format_nodes_output,
     )
 
@@ -793,6 +801,8 @@ def cmd_get_luns(args) -> None:
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
+        if role != "target":
+            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for target nodes")
         images, _, errors = collect_target_images(args.name, CONFIGFS_TARGET_PATH)
         images = _filter_images(images, args.image_type)
         if errors or label_error:
@@ -817,13 +827,15 @@ def cmd_get_luns(args) -> None:
                     if image.get("image_type") == args.image_type
                 ]
         payload = {"nodes": summaries}
-    emit_output(payload, args.json, formatter=format_luns_output)
+    emit_output(payload, formatter=format_luns_output)
 
 
 def cmd_get_tpgts(args) -> None:
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
+        if role != "target":
+            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for target nodes")
         tpgts, errors = collect_target_tpgts(args.name, CONFIGFS_TARGET_PATH)
         if errors or label_error:
             raise SystemExit("; ".join(errors + ([label_error] if label_error else [])))
@@ -835,18 +847,20 @@ def cmd_get_tpgts(args) -> None:
         payload = {
             "nodes": _collect_summaries_concurrently(nodes, CONFIGFS_TARGET_PATH)
         }
-    emit_output(payload, args.json, formatter=format_tpgts_output)
+    emit_output(payload,formatter=format_tpgts_output)
 
 
 def cmd_get_images(args) -> None:
     if args.name:
         labels, label_error = get_node_labels(args.name)
         role = detect_node_role(labels)
+        if role != "target":
+            raise SystemExit(f"{args.name}: role is '{role}', this command is only valid for target nodes")
         images, tpgts, errors = collect_target_images(args.name, CONFIGFS_TARGET_PATH)
         images = _filter_images(images, args.image_type)
         filtered_tpgts = []
         if args.image_type == "all":
-            filtered_tpgts = tpgts
+            filtered_tpgts = tpgts  
         else:
             allowed_ids = {image.lun_id for image in images}
             for tpgt in tpgts:
@@ -883,7 +897,7 @@ def cmd_get_images(args) -> None:
                     if image.get("image_type") == args.image_type
                 ]
         payload = {"nodes": summaries}
-    emit_output(payload, args.json, formatter=format_images_output)
+    emit_output(payload,formatter=format_images_output)
 
 
 def cmd_get_metrics(args) -> None:
@@ -1041,7 +1055,7 @@ def cmd_get_metrics(args) -> None:
         "errors": errors,
         "initiator_stats": initiator_stats,
     }
-    emit_output(report, args.json, formatter=format_report)
+    emit_output(report,formatter=format_report)
 
 def cmd_get_sessions(args) -> None:
     if args.name:
@@ -1055,7 +1069,7 @@ def cmd_get_sessions(args) -> None:
         if error:
             raise SystemExit(error)
         payload = {"nodes": _collect_initiator_summaries_concurrently(nodes)}
-    emit_output(payload, args.json, formatter=format_sessions_output)
+    emit_output(payload,formatter=format_sessions_output)
 
 def cmd_get_mount_status(args) -> None:
     if args.name:
@@ -1069,4 +1083,4 @@ def cmd_get_mount_status(args) -> None:
         if error:
             raise SystemExit(error)
         payload = {"nodes": _collect_initiator_mount_status_concurrently(nodes)}
-    emit_output(payload, args.json, formatter=format_mount_status_output)
+    emit_output(payload, formatter=format_mount_status_output)

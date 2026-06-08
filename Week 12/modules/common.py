@@ -5,8 +5,7 @@ import os
 import re
 import subprocess
 import shlex
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
 DEFAULT_TARGET_SELECTOR = "iscsi-target=true"
@@ -252,7 +251,7 @@ def read_backup_config_file(node: str, path: str):
         return None, f"Failed to parse JSON from {path}: {e}"
 
 
-def list_iqns(node: str, base_path: str) -> Tuple[List[str], List[str]]:
+def list_iqns(node: str) -> Tuple[List[str], List[str]]:
     data, error = get_saveconfig(node)
     if error:
         return [], [error]
@@ -263,14 +262,13 @@ def list_iqns(node: str, base_path: str) -> Tuple[List[str], List[str]]:
     return iqns, []
 
 
-def list_tpgts(node: str, iqn_path: str) -> Tuple[List[str], List[str]]:
+def list_tpgts(node: str) -> Tuple[List[str], List[str]]:
     data, error = get_saveconfig(node)
     if error:
         return [], [error]
-    iqn = os.path.basename(iqn_path)
     tpgts = []
     for target in data.get("targets", []):
-        if target.get("fabric") == "iscsi" and target.get("wwn") == iqn:
+        if target.get("fabric") == "iscsi" and "wwn" in target:
             for tpg in target.get("tpgs", []):
                 if "tag" in tpg:
                     tpgts.append(f"tpgt_{tpg['tag']}")
@@ -542,8 +540,5 @@ def render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
     return "\n".join(lines)
 
 
-def emit_output(payload: dict, as_json: bool, formatter=None) -> None:
-    if as_json:
-        print(json.dumps(payload, indent=2, sort_keys=True))
-    else:
-        print(formatter(payload) if formatter else str(payload))
+def emit_output(payload: dict, formatter=None) -> None:
+    print(formatter(payload) if formatter else str(payload))
