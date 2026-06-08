@@ -13,7 +13,7 @@ DEFAULT_TARGET_SELECTOR = "iscsi-target=true"
 DEFAULT_INITIATOR_SELECTOR = "iscsi-role=initiator"
 SAVECONFIG_PATHS = ["/etc/rtslib-fb-target/saveconfig.json", "/etc/target/saveconfig.json"]
 BACKUP_PATHS = ["/etc/rtslib-fb-target/backup", "/etc/target/backup"]
-
+ 
 
 @dataclass
 class LunImage:
