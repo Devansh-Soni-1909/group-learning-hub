@@ -9,13 +9,11 @@ from iscsi_cli_parts.iscsi_data import (
     cmd_get_images,
     cmd_get_luns,
     cmd_get_metrics,
-    cmd_get_node,
-    cmd_get_nodes,
+    cmd_describe_node,
     cmd_get_sessions,
     cmd_get_mount_status,
     cmd_get_tpgts,
 )
-from iscsi_cli_parts.target_configuration import cmd_delete_image
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,19 +28,19 @@ def build_parser() -> argparse.ArgumentParser:
     get_parser = subparsers.add_parser("get", help="Read-only iSCSI commands")
     get_subparsers = get_parser.add_subparsers(dest="get_command", required=True)
 
-    nodes_parser = get_subparsers.add_parser("nodes", help="List iSCSI target nodes")
-    nodes_parser.add_argument("--label", default=None, help="Kubernetes label selector for iSCSI nodes")
-    nodes_parser.add_argument("--json", action="store_true", help="Print JSON output")
-    nodes_parser.set_defaults(func=cmd_get_nodes)
+    describe_parser = subparsers.add_parser("describe", help="Detailed iSCSI resource descriptions")
+    describe_subparsers = describe_parser.add_subparsers(dest="describe_command", required=True)
 
-    node_parser = get_subparsers.add_parser(
-        "node",
-        aliases=["describe"],
-        help="Show a detailed iSCSI summary for one node",
+    node_parser = describe_subparsers.add_parser("node", help="Show a detailed iSCSI summary for one node")
+    node_parser.add_argument("--name", default=None, help="Node name to inspect")
+    node_parser.add_argument("--label", default=DEFAULT_TARGET_SELECTOR, help="Kubernetes label selector for iSCSI nodes when listing")
+    node_parser.add_argument(
+        "--base-path",
+        default="/sys/kernel/config/target/iscsi",
+        help="iSCSI target configuration path",
     )
-    node_parser.add_argument("--name", required=True, help="Node name to inspect")
     node_parser.add_argument("--json", action="store_true", help="Print JSON output")
-    node_parser.set_defaults(func=cmd_get_node)
+    node_parser.set_defaults(func=cmd_describe_node)
 
     luns_parser = get_subparsers.add_parser("luns", help="List LUNs for one or more target nodes")
     luns_parser.add_argument("--name", default=None, help="Target node to inspect")
@@ -86,17 +84,6 @@ def build_parser() -> argparse.ArgumentParser:
     errors_parser.add_argument("--lines", type=int, default=200, help="Number of recent log lines to collect per node")
     errors_parser.add_argument("--json", action="store_true", help="Print JSON output")
     errors_parser.set_defaults(func=cmd_get_errors)
-
-    delete_parser = subparsers.add_parser("delete", help="Destructive iSCSI commands")
-    delete_subparsers = delete_parser.add_subparsers(dest="delete_command", required=True)
-
-    delete_image_parser = delete_subparsers.add_parser("image", help="Delete one projected image")
-    delete_image_parser.add_argument("--name", required=True, help="Target node name")
-    delete_image_parser.add_argument("--tpgt", required=True, help="TPGT name, for example tpgt_1")
-    delete_image_parser.add_argument("--force", action="store_true", help="Delete without prompting for confirmation")
-    delete_image_parser.add_argument("--json", action="store_true", help="Print JSON output")
-    delete_image_parser.add_argument("image_id", help="File path or image identifier")
-    delete_image_parser.set_defaults(func=cmd_delete_image)
 
     return parser
 
