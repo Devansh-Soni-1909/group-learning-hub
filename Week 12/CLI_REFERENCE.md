@@ -5,21 +5,29 @@ CLI commands for retrieving and managing iSCSI target, initiator, image, and met
 ---
 
 ## Command Overview
+### Target Node Commands
 
 ```text
 iscsi
-│
-├── describe
-│   └── node
-│
-├── get
-│   ├── nodes
-│   ├── luns
-│   ├── tpgts
-│   ├── images
-│   ├── metrics
-│   ├── sessions
-│   └── mount-status
+└── get
+    ├── nodes
+    ├── luns
+    ├── tpgts
+    ├── images
+    ├── metrics
+
+iscsi
+└── describe
+    └── node
+```
+
+### Initiator Node Commands
+
+```text
+iscsi
+└── get
+    ├── sessions
+    └── mount-status
 ```
 ---
 
