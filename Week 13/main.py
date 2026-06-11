@@ -5,15 +5,15 @@ import argparse
 from modules import (
     DEFAULT_INITIATOR_SELECTOR,
     DEFAULT_TARGET_SELECTOR,
-    cmd_get_errors,
-    cmd_get_images,
-    cmd_get_luns,
-    cmd_get_metrics,
     cmd_get_nodes,
-    cmd_describe_node,
+    cmd_get_tpgts,
+    cmd_get_luns,
+    cmd_get_images,
+    cmd_get_metrics,
     cmd_get_sessions,
     cmd_get_mount_status,
-    cmd_get_tpgts,
+    cmd_get_errors,
+    cmd_describe_node,
 )
 
 
@@ -26,7 +26,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     nodes_parser = get_subparsers.add_parser("nodes", help="List iSCSI target nodes")
     nodes_parser.add_argument(
-        "--label", default=None, help="Kubernetes label selector for iSCSI nodes"
+        "--target",
+        action="store_true",
+        default=False,
+        help="Fetches iSCSI target nodes",
+    )
+    nodes_parser.add_argument(
+        "--initiator",
+        action="store_true",
+        default=False,
+        help="Fetches iSCSI initiator nodes",
     )
     nodes_parser.set_defaults(func=cmd_get_nodes)
 

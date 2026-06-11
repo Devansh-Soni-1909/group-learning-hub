@@ -6,9 +6,14 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence, Tuple
 from pathlib import Path
 
-from .kubernetes import get_kubernetes_nodes, get_node_labels, detect_node_role
-from .iscsi_target import (
+from .kubernetes import (
+    DEFAULT_INITIATOR_SELECTOR,
     DEFAULT_TARGET_SELECTOR,
+    get_kubernetes_nodes,
+    get_node_labels,
+    detect_node_role,
+)
+from .iscsi_target import (
     filter_images,
     collect_target_images,
     collect_target_tpgts,
@@ -48,12 +53,36 @@ from .formatter import (
 
 
 def cmd_get_nodes(args) -> None:
-    label = args.label or DEFAULT_TARGET_SELECTOR
-    nodes, error = get_kubernetes_nodes(label)
+    label = None
+    if (args.target and args.initiator) or (not args.target and not args.initiator):
+        target_nodes, error = get_kubernetes_nodes(
+            DEFAULT_TARGET_SELECTOR, full_info=True
+        )
+        for node in target_nodes.keys():
+            target_nodes[node]["role"] = "target"
+
+        initiator_nodes, error = get_kubernetes_nodes(
+            DEFAULT_INITIATOR_SELECTOR, full_info=True
+        )
+        for node in initiator_nodes.keys():
+            initiator_nodes[node]["role"] = "initiator"
+
+        label = f"{DEFAULT_INITIATOR_SELECTOR, DEFAULT_TARGET_SELECTOR}"
+        nodes = target_nodes | initiator_nodes
+    elif args.target:
+        label = DEFAULT_TARGET_SELECTOR
+        nodes, error = get_kubernetes_nodes(label, full_info=True)
+        for node in nodes.keys():
+            nodes[node]["role"] = "target"
+    elif args.initiator:
+        label = DEFAULT_INITIATOR_SELECTOR
+        nodes, error = get_kubernetes_nodes(label, full_info=True)
+        for node in nodes.keys():
+            nodes[node]["role"] = "initiator"
     if error:
         raise SystemExit(error)
     emit_output(
-        {"label": label, "nodes": nodes, "count": len(nodes)},
+        {"label": label, "nodes": nodes},
         formatter=format_nodes_output,
     )
 

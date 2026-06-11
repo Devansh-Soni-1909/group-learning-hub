@@ -23,15 +23,35 @@ def emit_output(payload: dict, formatter=None) -> None:
 
 
 def format_nodes_output(payload: dict) -> str:
-    nodes = payload.get("nodes", [])
-    lines = [
-        f'Nodes matching {payload.get("label", "selector")}: {payload.get("count", len(nodes))}'
-    ]
-    if nodes:
-        for node in nodes:
-            lines.append(f"- {node}")
-    else:
+    nodes = payload.get("nodes", {})
+    lines = [f'Nodes matching {payload.get("label", "selector")}: {len(nodes)}']
+    if not nodes:
         lines.append("None")
+        return "\n".join(lines)
+
+    headers = [
+        "NAME",
+        "STATUS",
+        "ROLE",
+        "ARCH",
+        "OS",
+        "OS IMAGE",
+    ]
+    rows = []
+    for node in nodes.values():
+        node_info = node.get("node_info", {})
+        rows.append(
+            [
+                node.get("name", ""),
+                node.get("status", ""),
+                node.get("role", ""),
+                node_info.get("arch", ""),
+                node_info.get("os", ""),
+                node_info.get("os_image", ""),
+            ]
+        )
+    lines.append("")
+    lines.append(render_table(headers, rows))
     return "\n".join(lines)
 
 

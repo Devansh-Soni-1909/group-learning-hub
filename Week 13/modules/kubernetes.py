@@ -21,30 +21,76 @@ def run_kubectl_json(command: str) -> Tuple[dict, Optional[str]]:
         return {}, f"invalid JSON output: {exc}"
 
 
-def get_kubernetes_nodes(node_selector: str) -> Tuple[List[str], Optional[str]]:
-    command = (
-        "kubectl get nodes "
-        f"-l {node_selector} "
-        "-o jsonpath='{.items[*].metadata.name}'"
-    )
-    result = run_command(command)
-    if result.returncode != 0:
-        message = (
-            result.stderr.strip()
-            or result.stdout.strip()
-            or f"exit {result.returncode}"
+def get_kubernetes_nodes(
+    node_selector: str, full_info: bool = False
+) -> Tuple[List[str] | Dict[str, Dict], Optional[str]]:
+    if full_info:
+        command = f"kubectl get nodes -l {node_selector}  -o json"
+        result = run_command(command)
+        if result.returncode != 0:
+            message = (
+                result.stderr.strip()
+                or result.stdout.strip()
+                or f"exit {result.returncode}"
+            )
+            return {}, message
+        try:
+            data = json.loads(result.stdout)
+            nodes_data = {}
+            for item in data.get("items", []):
+                metadata = item.get("metadata", {})
+                status = item.get("status", {})
+                node_info = status.get("nodeInfo", {})
+                ready_condition = next(
+                    (
+                        condition
+                        for condition in status.get("conditions", [])
+                        if condition.get("type") == "Ready"
+                    ),
+                    None,
+                )
+                uid = metadata.get("uid")
+                nodes_data[uid] = {
+                    "name": metadata.get("name"),
+                    "addresses": status.get("addresses", []),
+                    "node_info": {
+                        "arch": node_info.get("architecture"),
+                        "os": node_info.get("operatingSystem"),
+                        "os_image": node_info.get("osImage"),
+                    },
+                    "status": (
+                        "Ready"
+                        if ready_condition and ready_condition.get("status") == "True"
+                        else "NotReady"
+                    ),
+                }
+            return nodes_data, None
+        except json.JSONDecodeError as exc:
+            return [], f"invalid JSON output: {exc}"
+    else:
+        command = (
+            "kubectl get nodes "
+            f"-l {node_selector} "
+            "-o jsonpath='{.items[*].metadata.name}'"
         )
-        return [], message
-    output = result.stdout.replace("'", "").strip()
-    return [node for node in output.split() if node], None
+        result = run_command(command)
+        if result.returncode != 0:
+            message = (
+                result.stderr.strip()
+                or result.stdout.strip()
+                or f"exit {result.returncode}"
+            )
+            return [], message
+        output = result.stdout.replace("'", "").strip()
+        return [node for node in output.split() if node], None
 
 
-def get_node_json(node_name: str) -> Tuple[dict, Optional[str]]:
+def get_kubernetes_node_json(node_name: str) -> Tuple[dict, Optional[str]]:
     return run_kubectl_json(f"kubectl get node {node_name} -o json")
 
 
 def get_node_labels(node_name: str) -> Tuple[Dict[str, str], Optional[str]]:
-    payload, error = get_node_json(node_name)
+    payload, error = get_kubernetes_node_json(node_name)
     if error:
         return {}, error
     labels = payload.get("metadata", {}).get("labels", {})
