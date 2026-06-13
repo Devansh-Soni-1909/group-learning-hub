@@ -9,7 +9,7 @@
 1. Create iscsi_disks directory (if not present)
 
    ```
-   sudo mkdir /var/lib/iscsi_disks
+   sudo mkdir /var/lib/cps-local/boot-images
    ```
 
 2. Create multiple empty disks using fileio backstores
