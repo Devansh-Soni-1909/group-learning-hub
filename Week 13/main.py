@@ -40,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Fetches iSCSI initiator nodes",
     )
+    nodes_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
     nodes_parser.set_defaults(func=cmd_get_nodes)
 
     # cmd: get configs
@@ -47,6 +52,12 @@ def build_parser() -> argparse.ArgumentParser:
         "configs", help="List all the target node configuration versions"
     )
     configs_parser.add_argument("--name", default=None, help="Target node to inspect")
+    configs_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     configs_parser.set_defaults(func=cmd_get_configs)
 
     # cmd: get luns
@@ -63,6 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
     luns_parser.add_argument(
         "--metrics", action="store_true", default=False, help="Include LUN metrics"
     )
+    luns_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     luns_parser.set_defaults(func=cmd_get_luns)
 
     # cmd: get tpgts
@@ -70,6 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
         "tpgts", help="List TPGTs for one or more target nodes"
     )
     tpgts_parser.add_argument("--name", default=None, help="Target node to inspect")
+    tpgts_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     tpgts_parser.set_defaults(func=cmd_get_tpgts)
 
     # cmd: get images
@@ -84,6 +107,12 @@ def build_parser() -> argparse.ArgumentParser:
     images_parser.add_argument(
         "--metrics", action="store_true", default=False, help="Include LUN metrics"
     )
+    images_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     images_parser.set_defaults(func=cmd_get_images)
 
     # cmd: get metrics
@@ -94,6 +123,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Backup config file path to compare against; defaults to the latest backup version",
     )
+    metrics_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     metrics_parser.set_defaults(func=cmd_get_metrics)
 
     # cmd: get sessions
@@ -108,6 +143,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_INITIATOR_SELECTOR,
         help="Kubernetes label selector for initiator nodes",
     )
+    sessions_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     sessions_parser.set_defaults(func=cmd_get_sessions)
 
     # cmd: get mount-status
@@ -122,6 +163,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_INITIATOR_SELECTOR,
         help="Kubernetes label selector for initiator nodes",
     )
+    mount_status_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     mount_status_parser.set_defaults(func=cmd_get_mount_status)
 
     # cmd: get errors
@@ -140,6 +187,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=200,
         help="Number of recent log lines to collect per node",
     )
+    errors_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     errors_parser.set_defaults(func=cmd_get_errors)
 
     describe_parser = subparsers.add_parser(
@@ -161,6 +214,12 @@ def build_parser() -> argparse.ArgumentParser:
     node_parser.add_argument(
         "--metrics", action="store_true", default=False, help="Include LUN metrics"
     )
+    node_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     node_parser.set_defaults(func=cmd_describe_node)
 
     # cmd: describe config
@@ -171,6 +230,12 @@ def build_parser() -> argparse.ArgumentParser:
     config_parser.add_argument(
         "--file-path", default=None, help="Path of the configuration file to describe"
     )
+    config_parser.add_argument(
+        "--out-file",
+        default=None,
+        help="Save output to file (default: iscsi-output.txt)",
+    )
+
     config_parser.set_defaults(func=cmd_describe_config)
 
     return parser
