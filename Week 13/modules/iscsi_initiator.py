@@ -31,6 +31,8 @@ def _parse_lsblk_iscsi_lines(output: str) -> List[dict]:
             lun_number = ord(last_char) - ord("a")
             image_name = f"lun{lun_number}"
         status = "mounted" if mount_point.startswith("/") else "unmounted"
+        if not mount_point:
+            mount_point = "-"
         mounts.append(
             {
                 "device": f"/dev/{device_name}",
