@@ -1,9 +1,63 @@
 import json
 from typing import Tuple, List, Optional, Dict
 from .utils import run_command
+from pathlib import Path
+import yaml
 
-DEFAULT_TARGET_SELECTOR = "iscsi-target=true"
-DEFAULT_INITIATOR_SELECTOR = "iscsi-role=initiator"
+DEFAULT_TARGET_SELECTOR_VALUE = "iscsi-role=target"
+DEFAULT_INITIATOR_SELECTOR_VALUE = "iscsi-role=initiator"
+
+CLI_CONFIG_PATH = Path("/etc/iscsi/config.yml")
+TARGET_SELECTOR_KEY = "target-selector"
+INITIATOR_SELECTOR_KEY = "initiator-selector"
+
+
+def _load_config() -> dict:
+    if not CLI_CONFIG_PATH.exists():
+        return {}
+    with CLI_CONFIG_PATH.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle)
+    return data if isinstance(data, dict) else {}
+
+
+def _save_config(config: dict) -> None:
+    CLI_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with CLI_CONFIG_PATH.open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(config, handle, sort_keys=False)
+
+
+def _get_config_value(key: str, default: str) -> Tuple[str, str | None]:
+    try:
+        config = _load_config()
+        return config.get(key, default), None
+    except Exception as exc:
+        return default, str(exc)
+
+
+def _set_config_value(key: str, value: str) -> Tuple[str, str | None]:
+    try:
+        config = _load_config()
+        config[key] = value
+        _save_config(config)
+        return value, None
+    except Exception as exc:
+        return "", str(exc)
+
+
+def get_target_node_label() -> Tuple[str, str | None]:
+    return _get_config_value(TARGET_SELECTOR_KEY, DEFAULT_TARGET_SELECTOR_VALUE)
+
+
+def set_target_node_label(label: str) -> Tuple[str, str | None]:
+    return _set_config_value(TARGET_SELECTOR_KEY, label)
+
+
+def get_initiator_node_label() -> Tuple[str, str | None]:
+    return _get_config_value(INITIATOR_SELECTOR_KEY, DEFAULT_INITIATOR_SELECTOR_VALUE)
+
+
+def set_initator_node_label(label: str) -> Tuple[str, str | None]:
+    return _set_config_value(INITIATOR_SELECTOR_KEY, label)
 
 
 def run_kubectl_json(command: str) -> Tuple[dict, Optional[str]]:

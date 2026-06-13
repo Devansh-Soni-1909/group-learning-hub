@@ -4,7 +4,7 @@ import re
 import json
 import shlex
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, Tuple, Optional, List, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -13,13 +13,6 @@ from dataclasses import asdict
 from .schemas import LunImage, TpgtInfo
 from .utils import run_pdsh_text, run_pdsh_lines, parse_metric_value
 from .error_collector import collect_node_diagnostics
-from .kubernetes import (
-    get_node_labels,
-    detect_node_role,
-    DEFAULT_INITIATOR_SELECTOR,
-    DEFAULT_TARGET_SELECTOR,
-)
-from .iscsi_initiator import build_initiator_node_summary
 
 SAVECONFIG_PATHS = [
     "/etc/rtslib-fb-target/saveconfig.json",

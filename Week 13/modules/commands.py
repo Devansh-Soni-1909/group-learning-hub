@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Sequence, Tuple
-from pathlib import Path
 
 from .kubernetes import (
-    DEFAULT_INITIATOR_SELECTOR,
-    DEFAULT_TARGET_SELECTOR,
+    CLI_CONFIG_PATH,
+    get_target_node_label,
+    set_target_node_label,
+    get_initiator_node_label,
+    set_initator_node_label,
     get_kubernetes_nodes,
     get_node_labels,
     detect_node_role,
@@ -50,6 +50,15 @@ from .formatter import (
     format_initiator_metrics,
     emit_output,
 )
+
+DEFAULT_TARGET_SELECTOR, error = get_target_node_label()
+if error:
+    raise SystemExit("Error getting target node label")
+
+DEFAULT_INITIATOR_SELECTOR, error = get_initiator_node_label()
+if error:
+    raise SystemExit("Error getting initiator node label")
+
 
 # get commands
 
@@ -325,6 +334,21 @@ def cmd_get_errors(args) -> None:
                 )
 
     emit_output(payload, args.json, formatter=format_error_summary)
+
+
+# set commands
+
+
+def cmd_set_label(args) -> None:
+    if args.target:
+        label = args.target
+        set_target_node_label(label)
+    if args.initiator:
+        label = args.initiator
+        set_initator_node_label(label)
+    if not args.target and not args.initiator:
+        raise SystemExit("Provide target/initiator labels")
+    print(f"Config saved at {CLI_CONFIG_PATH}")
 
 
 # describe commands

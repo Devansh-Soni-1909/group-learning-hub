@@ -1,6 +1,8 @@
 from .kubernetes import (
-    DEFAULT_INITIATOR_SELECTOR,
-    DEFAULT_TARGET_SELECTOR,
+    get_target_node_label,
+    set_target_node_label,
+    get_initiator_node_label,
+    set_initator_node_label,
 )
 from .commands import (
     cmd_get_nodes,
@@ -12,6 +14,7 @@ from .commands import (
     cmd_get_sessions,
     cmd_get_mount_status,
     cmd_get_errors,
+    cmd_set_label,
     cmd_describe_node,
     cmd_describe_config,
 )

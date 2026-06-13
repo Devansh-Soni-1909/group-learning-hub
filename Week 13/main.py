@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 
 from modules import (
-    DEFAULT_INITIATOR_SELECTOR,
-    DEFAULT_TARGET_SELECTOR,
+    get_target_node_label,
+    get_initiator_node_label,
     cmd_get_nodes,
     cmd_get_configs,
     cmd_get_tpgts,
@@ -14,9 +14,13 @@ from modules import (
     cmd_get_sessions,
     cmd_get_mount_status,
     cmd_get_errors,
+    cmd_set_label,
     cmd_describe_node,
     cmd_describe_config,
 )
+
+DEFAULT_TARGET_SELECTOR = None
+DEFAULT_INITIATOR_SELECTOR = None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -142,6 +146,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     errors_parser.set_defaults(func=cmd_get_errors)
 
+    set_parser = subparsers.add_parser("set", help="Configure node discovery settings")
+    set_subparsers = set_parser.add_subparsers(dest="set_command", required=True)
+
+    # cmd: set label
+    label_parser = set_subparsers.add_parser(
+        "label",
+        help="Configure label selectors used to discover target and initiator nodes",
+    )
+    label_parser.add_argument(
+        "--target",
+        default=DEFAULT_TARGET_SELECTOR,
+        help="Label selector used to identify target nodes",
+    )
+    label_parser.add_argument(
+        "--initiator",
+        default=DEFAULT_INITIATOR_SELECTOR,
+        help="Label selector used to identify initiator nodes",
+    )
+    label_parser.set_defaults(func=cmd_set_label)
+
     describe_parser = subparsers.add_parser(
         "describe", help="Detailed iSCSI resource descriptions"
     )
@@ -177,6 +201,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    DEFAULT_TARGET_SELECTOR, terror = get_target_node_label()
+    if terror:
+        raise SystemExit(f"Error getting target node label: {terror}")
+    DEFAULT_INITIATOR_SELECTOR, ierror = get_initiator_node_label()
+    if ierror:
+        raise SystemExit(f"Error getting initiator node label: {ierror}")
+
     parser = build_parser()
     args = parser.parse_args(argv)
     args.func(args)
