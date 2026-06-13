@@ -83,12 +83,7 @@ def cmd_get_nodes(args) -> None:
             nodes[node]["role"] = "initiator"
     if error:
         raise SystemExit(error)
-    emit_output(
-        {"label": label, "nodes": nodes},
-        formatter=format_nodes_output,
-    )
-
-
+    emit_output({"label": label, "nodes": nodes}, formatter=format_nodes_output, out_file=args.out_file)
 def cmd_get_configs(args) -> None:
     if args.name:
         labels, error = get_node_labels(args.name)
@@ -106,7 +101,7 @@ def cmd_get_configs(args) -> None:
             )
         emit_output(
             {"node": args.name, "current_config": current, "versions": versions},
-            formatter=format_configs_output,
+            formatter=format_configs_output, out_file=args.out_file
         )
     else:
         raise SystemExit(f"Please provide the node name with the flag --name")
@@ -146,7 +141,7 @@ def cmd_get_luns(args) -> None:
                     if image.get("image_type") == args.image_type
                 ]
         payload = {"nodes": summaries, "with_metrics": with_metrics}
-    emit_output(payload, formatter=format_luns_output)
+    emit_output(payload, formatter=format_luns_output,out_file=args.out_file)
 
 
 def cmd_get_tpgts(args) -> None:
@@ -167,7 +162,7 @@ def cmd_get_tpgts(args) -> None:
         if error:
             raise SystemExit(error)
         payload = {"nodes": collect_summaries_concurrently(nodes, with_metrics)}
-    emit_output(payload, formatter=format_tpgts_output)
+    emit_output(payload, formatter=format_tpgts_output,out_file=args.out_file)
 
 
 def cmd_get_images(args) -> None:
@@ -219,7 +214,7 @@ def cmd_get_images(args) -> None:
                     if image.get("image_type") == args.image_type
                 ]
         payload = {"nodes": summaries, "with_metrics": with_metrics}
-    emit_output(payload, formatter=format_images_output)
+    emit_output(payload, formatter=format_images_output,out_file=args.out_file)
 
 
 def cmd_get_metrics(args) -> None:
@@ -239,7 +234,7 @@ def cmd_get_metrics(args) -> None:
             return
         if role == "target":
             summary = build_target_node_summary(node_name, with_metrics=True)
-            emit_output(summary, formatter=format_target_metrics)
+            emit_output(summary, formatter=format_target_metrics,out_file=args.out_file)
 
     else:
         raise SystemExit(f"Provide a node name with --name flag")
@@ -261,7 +256,7 @@ def cmd_get_sessions(args) -> None:
         if error:
             raise SystemExit(error)
         payload = {"nodes": collect_initiator_summaries_concurrently(nodes)}
-    emit_output(payload, formatter=format_sessions_output)
+    emit_output(payload, formatter=format_sessions_output,out_file=args.out_file)
 
 
 def cmd_get_mount_status(args) -> None:
@@ -280,7 +275,7 @@ def cmd_get_mount_status(args) -> None:
         if error:
             raise SystemExit(error)
         payload = {"nodes": collect_initiator_mount_status_concurrently(nodes)}
-    emit_output(payload, formatter=format_mount_status_output)
+    emit_output(payload, formatter=format_mount_status_output,out_file=args.out_file)
 
 
 def cmd_get_errors(args) -> None:
@@ -324,7 +319,7 @@ def cmd_get_errors(args) -> None:
                     }
                 )
 
-    emit_output(payload, args.json, formatter=format_error_summary)
+    emit_output(payload, formatter=format_error_summary,out_file=args.out_file)
 
 
 # describe commands
@@ -341,11 +336,11 @@ def cmd_describe_node(args) -> None:
             }, label_error
         if role == "initiator":
             summary = build_initiator_node_summary(node_name)
-            emit_output(summary, formatter=format_initiator_summary)
+            emit_output(summary, formatter=format_initiator_summary,out_file=args.out_file)
             return
         if role == "target":
             summary = build_target_node_summary(node_name, with_metrics=False)
-            emit_output(summary, formatter=format_target_summary)
+            emit_output(summary, formatter=format_target_summary,out_file=args.out_file)
     else:
         raise SystemExit(f"Provide the node name with --name flag")
 
@@ -358,7 +353,7 @@ def cmd_describe_config(args) -> None:
                 raise SystemExit(
                     f"Error describing config {args.file_path} in {args.node}: {error}"
                 )
-            emit_output(payload, formatter=format_target_summary)
+            emit_output(payload, formatter=format_target_summary,out_file=args.out_file)
         else:
             raise SystemExit(
                 "Please provide configuraiton file path with --file-path flag"
